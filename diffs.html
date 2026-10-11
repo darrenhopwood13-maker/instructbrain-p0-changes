@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en-GB"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>instructBrain report integrity - the diffs</title>
+<style>
+  :root{ --navy:#0B2038; --lime:#57FF00; --ink:#12202E; --muted:#5A6B7C; --line:#D9E1E8; --wash:#F4F7FA; }
+  body{ margin:0; font-family:"Liberation Sans",Arial,Helvetica,sans-serif; color:var(--ink); background:#fff; }
+  .bar{ height:9px; background:var(--navy); } .bar span{ display:block; height:9px; width:34%; background:var(--lime); }
+  header{ padding:14px 16px 10px; }
+  h1{ margin:0; font-size:19px; color:var(--navy); }
+  .sub{ color:var(--muted); font-size:13px; margin-top:5px; }
+  .note{ background:var(--wash); border-left:5px solid var(--lime); padding:9px 12px; margin:12px 16px; border-radius:0 6px 6px 0; font-size:13.5px; }
+  .note b{ color:var(--navy); }
+  pre{ margin:0; padding:12px 16px 40px; font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace;
+        font-size:11px; line-height:1.45; white-space:pre; overflow-x:auto; background:#FBFCFD; }
+  .add{ background:#E8F7EC; color:#155724; display:inline-block; width:100%; }
+  .del{ background:#FDECEA; color:#8B1A15; display:inline-block; width:100%; }
+  .meta{ color:#5A6B7C; font-weight:bold; display:inline-block; width:100%; }
+  .stat{ padding:0 16px 12px; font-size:12.5px; color:var(--muted); white-space:pre; overflow-x:auto;
+          font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace; }
+</style></head><body>
+<div class="bar"><span></span></div>
+<header>
+  <h1>instructBrain report integrity - the diffs</h1>
+  <div class="sub">Branch <code>p0/report-integrity</code>, commit b767986 - not pushed, not published</div>
+</header>
+<div class="note">
+  <b>Nothing here is live.</b> This is a local branch. The four changes run with no database change.
+  The one migration file included is <b>not applied</b>, and the code that would use it is deliberately not written yet.
+</div>
+<h3 style="padding:0 16px;color:#0B2038;margin:6px 0 0">What changed, by file</h3>
+<div class="stat"> .../__tests__/confirmation-invalidation.test.ts    | 65 ++++++++++++++++++++++
+ src/lib/__tests__/share-access.test.ts             | 50 +++++++++++++++++
+ src/lib/email/email.server.ts                      | 34 +++++++++--
+ src/lib/email/templates.ts                         | 48 ++++++++++++----
+ src/lib/report/report-data.ts                      | 50 ++++++++++++++++-
+ src/lib/report/share-access.ts                     | 47 ++++++++++++++++
+ src/routes/_authenticated/reports.$id.index.tsx    | 13 +++--
+ src/routes/api/public/shared-report.$token.ts      | 25 ++++++---
+ ...20261011210000_report_share_version_pinning.sql | 23 ++++++++
+ 9 files changed, 325 insertions(+), 30 deletions(-)
+</div>
+<pre><span class="meta">diff --git a/src/lib/__tests__/confirmation-invalidation.test.ts b/src/lib/__tests__/confirmation-invalidation.test.ts</span>
+new file mode 100644
+<span class="meta">index 0000000..80adca1</span>
+<span class="meta">--- /dev/null</span>
+<span class="meta">+++ b/src/lib/__tests__/confirmation-invalidation.test.ts</span>
+<span class="meta">@@ -0,0 +1,65 @@</span>
+<span class="add">+import { describe, expect, it } from &quot;vitest&quot;;</span>
+<span class="add">+</span>
+<span class="add">+import { MATERIAL_CONTENT_FIELDS, withdrawsConfirmation } from &quot;@/lib/report/report-data&quot;;</span>
+<span class="add">+</span>
+<span class="add">+/**</span>
+<span class="add">+ * The defect these cover: allocating a trade wrote confirmed_at, so routing an</span>
+<span class="add">+ * item counted as approving its wording, and the publish gate -- blocked on</span>
+<span class="add">+ * unconfirmed items -- was satisfied by a decision nobody had made.</span>
+<span class="add">+ */</span>
+<span class="add">+describe(&quot;what withdraws a person&#x27;s confirmation&quot;, () =&gt; {</span>
+<span class="add">+  it(&quot;withdraws it when the report wording changes&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({ finding_text: &quot;A new description.&quot; })).toBe(true);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;withdraws it when the remedy is rewritten&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({ remedial_text: &quot;Rake out and repoint.&quot; })).toBe(true);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;withdraws it when the severity or grade is changed&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({ severity: &quot;high&quot; })).toBe(true);</span>
+<span class="add">+    expect(withdrawsConfirmation({ condition_grade: &quot;C2&quot; })).toBe(true);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;withdraws it when the evidence is corrected&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({ capture_fields: { location: &quot;Level 2&quot; } })).toBe(true);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;does NOT withdraw it for allocation, which is a routing decision&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({ assigned_trade: &quot;Bricklayer&quot; })).toBe(false);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;does NOT withdraw it for a date, a status or the lifecycle&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({ due_date: &quot;2026-10-20&quot; })).toBe(false);</span>
+<span class="add">+    expect(withdrawsConfirmation({ status: &quot;snag&quot; })).toBe(false);</span>
+<span class="add">+    expect(withdrawsConfirmation({ due_date_overridden: true })).toBe(false);</span>
+<span class="add">+    expect(withdrawsConfirmation({ lifecycle_state: &quot;open&quot; })).toBe(false);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;does not withdraw it for an empty patch&quot;, () =&gt; {</span>
+<span class="add">+    expect(withdrawsConfirmation({})).toBe(false);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;counts a confirmation as content-free, so approving cannot clear itself&quot;, () =&gt; {</span>
+<span class="add">+    for (const field of MATERIAL_CONTENT_FIELDS) {</span>
+<span class="add">+      expect(field).not.toBe(&quot;confirmed_at&quot;);</span>
+<span class="add">+      expect(field).not.toBe(&quot;confirmed_by&quot;);</span>
+<span class="add">+      expect(field).not.toBe(&quot;assigned_trade&quot;);</span>
+<span class="add">+    }</span>
+<span class="add">+    expect(withdrawsConfirmation({ confirmed_at: &quot;2026-10-11T00:00:00Z&quot; })).toBe(false);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;covers every content field the report actually prints&quot;, () =&gt; {</span>
+<span class="add">+    // A field that reaches the client&#x27;s report but is missing from this list is</span>
+<span class="add">+    // a field a person can change after approving, silently.</span>
+<span class="add">+    for (const field of [</span>
+<span class="add">+      &quot;finding_text&quot;,</span>
+<span class="add">+      &quot;remedial_text&quot;,</span>
+<span class="add">+      &quot;severity&quot;,</span>
+<span class="add">+      &quot;condition_grade&quot;,</span>
+<span class="add">+      &quot;regulatory_reference&quot;,</span>
+<span class="add">+    ]) {</span>
+<span class="add">+      expect(MATERIAL_CONTENT_FIELDS).toContain(field);</span>
+<span class="add">+    }</span>
+<span class="add">+  });</span>
+<span class="add">+});</span>
+<span class="meta">diff --git a/src/lib/__tests__/share-access.test.ts b/src/lib/__tests__/share-access.test.ts</span>
+new file mode 100644
+<span class="meta">index 0000000..d3567b5</span>
+<span class="meta">--- /dev/null</span>
+<span class="meta">+++ b/src/lib/__tests__/share-access.test.ts</span>
+<span class="meta">@@ -0,0 +1,50 @@</span>
+<span class="add">+import { describe, expect, it } from &quot;vitest&quot;;</span>
+<span class="add">+import { shareAccessDecision } from &quot;@/lib/report/share-access&quot;;</span>
+<span class="add">+</span>
+<span class="add">+/**</span>
+<span class="add">+ * The defect these cover: reopening a published report set it to `in_review`,</span>
+<span class="add">+ * and the public endpoint only checked status on the manual branch -- so every</span>
+<span class="add">+ * link already sent to a client began serving the working copy.</span>
+<span class="add">+ */</span>
+<span class="add">+describe(&quot;what a share link is allowed to serve&quot;, () =&gt; {</span>
+<span class="add">+  it(&quot;serves a published report as a review page&quot;, () =&gt; {</span>
+<span class="add">+    const decision = shareAccessDecision({ status: &quot;issued&quot;, manualOnly: false });</span>
+<span class="add">+    expect(decision.allowed).toBe(true);</span>
+<span class="add">+    if (decision.allowed) expect(decision.pdfOnly).toBe(false);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;serves a published manual report as PDF only&quot;, () =&gt; {</span>
+<span class="add">+    const decision = shareAccessDecision({ status: &quot;issued&quot;, manualOnly: true });</span>
+<span class="add">+    expect(decision.allowed).toBe(true);</span>
+<span class="add">+    if (decision.allowed) expect(decision.pdfOnly).toBe(true);</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;refuses a report reopened for editing, which is the reopen leak&quot;, () =&gt; {</span>
+<span class="add">+    const decision = shareAccessDecision({ status: &quot;in_review&quot;, manualOnly: false });</span>
+<span class="add">+    expect(decision.allowed).toBe(false);</span>
+<span class="add">+    if (!decision.allowed) {</span>
+<span class="add">+      expect(decision.httpStatus).toBe(404);</span>
+<span class="add">+      expect(decision.reason).toBe(&quot;unpublished&quot;);</span>
+<span class="add">+    }</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+<span class="add">+  it.each([&quot;draft&quot;, &quot;analysing&quot;, &quot;withheld&quot;, null, &quot;&quot;])(</span>
+<span class="add">+    &quot;refuses a report whose status is %s, whatever its kind&quot;,</span>
+<span class="add">+    (status) =&gt; {</span>
+<span class="add">+      for (const manualOnly of [true, false]) {</span>
+<span class="add">+        const decision = shareAccessDecision({ status, manualOnly });</span>
+<span class="add">+        expect(decision.allowed).toBe(false);</span>
+<span class="add">+      }</span>
+<span class="add">+    },</span>
+<span class="add">+  );</span>
+<span class="add">+</span>
+<span class="add">+  it(&quot;does not reveal whether an unpublished token is real&quot;, () =&gt; {</span>
+<span class="add">+    const decision = shareAccessDecision({ status: &quot;draft&quot;, manualOnly: false });</span>
+<span class="add">+    // Same words and same status as an unrecognised token: a guessed token</span>
+<span class="add">+    // cannot be confirmed by the reply it gets.</span>
+<span class="add">+    if (!decision.allowed) {</span>
+<span class="add">+      expect(decision.error).toBe(&quot;This report is not currently published.&quot;);</span>
+<span class="add">+      expect(decision.httpStatus).toBe(404);</span>
+<span class="add">+    }</span>
+<span class="add">+  });</span>
+<span class="add">+});</span>
+<span class="meta">diff --git a/src/lib/email/email.server.ts b/src/lib/email/email.server.ts</span>
+<span class="meta">index 04d32c0..c13ded7 100644</span>
+<span class="meta">--- a/src/lib/email/email.server.ts</span>
+<span class="meta">+++ b/src/lib/email/email.server.ts</span>
+<span class="meta">@@ -348,12 +348,21 @@ export async function sendReportSharedEmail(</span>
+ ): Promise&lt;SendOutcome&gt; {
+   const { data: report, error } = await db
+     .from(&quot;reports&quot;)
+<span class="del">-    .select(&quot;id, title, reference, report_date, issued_at, project_id, projects(name)&quot;)</span>
+<span class="add">+    .select(&quot;id, title, reference, report_date, issued_at, status, project_id, projects(name)&quot;)</span>
+     .eq(&quot;id&quot;, input.reportId)
+     .single();
+   if (error || !report) throw new Error(&quot;That report could not be read, so nothing was sent.&quot;);
+   const row = report as Record&lt;string, any&gt;;
+ 
+<span class="add">+  // Nothing external exists for a report that is not published. Sending anyway</span>
+<span class="add">+  // did not fail loudly: the client email lost its share link and its</span>
+<span class="add">+  // attachment and went out empty, which is worse than being refused.</span>
+<span class="add">+  if ((row[&quot;status&quot;] as string | null) !== &quot;issued&quot;) {</span>
+<span class="add">+    throw new Error(</span>
+<span class="add">+      &quot;This report has not been published yet, so there is nothing for the client to open. Publish it, then send.&quot;,</span>
+<span class="add">+    );</span>
+<span class="add">+  }</span>
+<span class="add">+</span>
+   const { data: share } = await db
+     .from(&quot;report_shares&quot;)
+     .select(&quot;token, expires_at, revoked_at&quot;)
+<span class="meta">@@ -693,6 +702,10 @@ export async function sendTradeExtractEmail(</span>
+       items,
+       itemListUrl: link?.url ?? null,
+       itemListIsReadOnly: link?.readOnly ?? false,
+<span class="add">+      // A work pack for a report that is not published yet goes out labelled as</span>
+<span class="add">+      // a draft, so a supplier can start early without it reading as the</span>
+<span class="add">+      // client&#x27;s finished report.</span>
+<span class="add">+      isDraft: (row[&quot;status&quot;] as string | null) !== &quot;issued&quot;,</span>
+       sentByName: await senderNameFor(row[&quot;author_id&quot;] as string | null, actor.claims, &quot;Your surveyor&quot;),
+       attachment,
+     },
+<span class="meta">@@ -733,7 +746,7 @@ export async function sendCloseOutRequestEmail(</span>
+ ): Promise&lt;SendOutcome&gt; {
+   const { data: finding, error } = await db
+     .from(&quot;findings&quot;)
+<span class="del">-    .select(&quot;id, ref, remedial_text, finding_text, due_date, is_confidential, capture_fields&quot;)</span>
+<span class="add">+    .select(&quot;id, ref, remedial_text, finding_text, due_date, is_confidential, capture_fields, assigned_trade&quot;)</span>
+     .eq(&quot;id&quot;, input.findingId)
+     .single();
+   if (error || !finding) throw new Error(&quot;That item could not be read, so nothing was sent.&quot;);
+<span class="meta">@@ -744,9 +757,10 @@ export async function sendCloseOutRequestEmail(</span>
+ 
+   const { data: report } = await db
+     .from(&quot;reports&quot;)
+<span class="del">-    .select(&quot;projects(name)&quot;)</span>
+<span class="add">+    .select(&quot;id, status, organisation_id, projects(name)&quot;)</span>
+     .eq(&quot;id&quot;, input.reportId)
+     .single();
+<span class="add">+  const reportRow = (report ?? {}) as Record&lt;string, any&gt;;</span>
+   const fields = (row[&quot;capture_fields&quot;] ?? {}) as Record&lt;string, string&gt;;
+ 
+   const { buildEmailPdf } = await import(&quot;@/lib/report/pdf-attachment.server&quot;);
+<span class="meta">@@ -755,6 +769,16 @@ export async function sendCloseOutRequestEmail(</span>
+     findingIds: [input.findingId],
+   });
+ 
+<span class="add">+  // The close-out link goes to the same no-sign-in page the trade pack uses.</span>
+<span class="add">+  // It used to be an in-app /reports/&lt;id&gt; URL, which a subcontractor cannot</span>
+<span class="add">+  // open -- contradicting the rule stated above `itemListLinkFor`.</span>
+<span class="add">+  const link = await itemListLinkFor(db, {</span>
+<span class="add">+    reportId: input.reportId,</span>
+<span class="add">+    organisationId: (reportRow[&quot;organisation_id&quot;] as string | null) ?? null,</span>
+<span class="add">+    trade: (row[&quot;assigned_trade&quot;] as string | null) ?? null,</span>
+<span class="add">+    status: (reportRow[&quot;status&quot;] as string | null) ?? null,</span>
+<span class="add">+  });</span>
+<span class="add">+</span>
+   const message: EmailMessage = {
+     template: &quot;CLOSE_OUT_REQUEST&quot;,
+     data: {
+<span class="meta">@@ -762,8 +786,8 @@ export async function sendCloseOutRequestEmail(</span>
+       location: resolveLocation(fields) || &quot;Not recorded&quot;,
+       requiredAction: (row[&quot;remedial_text&quot;] as string) || (row[&quot;finding_text&quot;] as string) || &quot;&quot;,
+       targetDate: (row[&quot;due_date&quot;] as string | null) ?? null,
+<span class="del">-      projectName: ((report as Record&lt;string, any&gt;)?.[&quot;projects&quot;]?.[&quot;name&quot;] as string) ?? &quot;this project&quot;,</span>
+<span class="del">-      itemListUrl: absoluteUrl(`/reports/${input.reportId}`),</span>
+<span class="add">+      projectName: (reportRow[&quot;projects&quot;]?.[&quot;name&quot;] as string) ?? &quot;this project&quot;,</span>
+<span class="add">+      itemListUrl: link?.url ?? null,</span>
+       sentByName: actorName(actor.claims, &quot;Your surveyor&quot;),
+       attachment,
+     },
+<span class="meta">diff --git a/src/lib/email/templates.ts b/src/lib/email/templates.ts</span>
+<span class="meta">index 8333e68..c398606 100644</span>
+<span class="meta">--- a/src/lib/email/templates.ts</span>
+<span class="meta">+++ b/src/lib/email/templates.ts</span>
+<span class="meta">@@ -88,6 +88,12 @@ export type TradeExtractPayload = {</span>
+    * sign in.
+    */
+   itemListUrl: string | null;
+<span class="add">+  /**</span>
+<span class="add">+   * True when the report behind this work pack has not been published yet. The</span>
+<span class="add">+   * pack is still sent -- a supplier can usefully start early -- but it must be</span>
+<span class="add">+   * impossible to mistake for a client report.</span>
+<span class="add">+   */</span>
+<span class="add">+  isDraft?: boolean;</span>
+   /** True when the link opens a read-only copy of the report, not a live list. */
+   itemListIsReadOnly?: boolean;
+   sentByName: string;
+<span class="meta">@@ -100,7 +106,7 @@ export type CloseOutPayload = {</span>
+   requiredAction: string;
+   targetDate: string | null;
+   projectName: string;
+<span class="del">-  itemListUrl: string;</span>
+<span class="add">+  itemListUrl: string | null;</span>
+   sentByName: string;
+   attachment?: EmailAttachment | null;
+ };
+<span class="meta">@@ -394,10 +400,14 @@ function renderTradeExtract(data: TradeExtractPayload): RenderedEmail {</span>
+   const earliest = earliestTargetDate(data.items);
+   // A custom report has no project to name, so the subject leaves it out rather
+   // than naming a placeholder.
+<span class="del">-  const subject = [data.trade, `${count} item${count === 1 ? &quot;&quot; : &quot;s&quot;}`, data.projectName]</span>
+<span class="del">-    .filter(Boolean)</span>
+<span class="del">-    .join(&quot; — &quot;)</span>
+<span class="del">-    .concat(data.reportReference ? ` (${data.reportReference})` : &quot;&quot;);</span>
+<span class="add">+  // A work pack for an unpublished report says so, in the subject line and on</span>
+<span class="add">+  // the face of the message. It is still sent -- starting early is the point --</span>
+<span class="add">+  // but it must not read as the client&#x27;s report.</span>
+<span class="add">+  const subject = (data.isDraft ? &quot;DRAFT WORK PACK — &quot; : &quot;&quot;)</span>
+<span class="add">+    + [data.trade, `${count} item${count === 1 ? &quot;&quot; : &quot;s&quot;}`, data.projectName]</span>
+<span class="add">+      .filter(Boolean)</span>
+<span class="add">+      .join(&quot; — &quot;)</span>
+<span class="add">+      .concat(data.reportReference ? ` (${data.reportReference})` : &quot;&quot;);</span>
+   const breakdownLine = breakdown.map((entry) =&gt; `${entry.label}: ${entry.count}`).join(&quot;, &quot;);
+ 
+   // With no project to point at, the survey is identified by the day it was
+<span class="meta">@@ -415,6 +425,13 @@ function renderTradeExtract(data: TradeExtractPayload): RenderedEmail {</span>
+   const html = shell(subject, [
+     h1(`${data.trade}: ${count} item${count === 1 ? &quot;&quot; : &quot;s&quot;} to action`),
+     p(`${data.sentByName} has sent you the items below from ${surveyPhrase}.`),
+<span class="add">+    ...(data.isDraft</span>
+<span class="add">+      ? [</span>
+<span class="add">+          p(</span>
+<span class="add">+            &quot;&lt;strong&gt;DRAFT WORK PACK.&lt;/strong&gt; The report behind these items has not been published yet, so the wording and the list may still change.&quot;,</span>
+<span class="add">+          ),</span>
+<span class="add">+        ]</span>
+<span class="add">+      : []),</span>
+     definitions([
+       ...(data.projectName ? [[&quot;Project&quot;, data.projectName] as [string, string]] : []),
+       [&quot;Report reference&quot;, data.reportReference ?? &quot;&quot;],
+<span class="meta">@@ -433,6 +450,12 @@ function renderTradeExtract(data: TradeExtractPayload): RenderedEmail {</span>
+     `${data.trade}: ${count} item${count === 1 ? &quot;&quot; : &quot;s&quot;} to action`,
+     &quot;&quot;,
+     `${data.sentByName} has sent you the items below from ${surveyPhrase}.`,
+<span class="add">+    ...(data.isDraft</span>
+<span class="add">+      ? [</span>
+<span class="add">+          &quot;&quot;,</span>
+<span class="add">+          &quot;DRAFT WORK PACK - the report behind these items has not been published yet, so the list may still change.&quot;,</span>
+<span class="add">+        ]</span>
+<span class="add">+      : []),</span>
+     &quot;&quot;,
+     data.projectName ? `Project: ${data.projectName}` : &quot;&quot;,
+     data.reportReference ? `Report reference: ${data.reportReference}` : &quot;&quot;,
+<span class="meta">@@ -469,13 +492,16 @@ function renderCloseOut(data: CloseOutPayload): RenderedEmail {</span>
+       [&quot;Required action&quot;, data.requiredAction],
+       [&quot;Target date&quot;, data.targetDate ?? &quot;Not set&quot;],
+     ]),
+<span class="del">-    button(&quot;Update this item&quot;, data.itemListUrl),</span>
+<span class="add">+    ...(data.itemListUrl ? [button(&quot;Update this item&quot;, data.itemListUrl)] : []),</span>
+     small(
+<span class="del">-      data.attachment</span>
+<span class="del">-        ? &quot;A PDF of this item is attached. Recording the close-out keeps the report complete and defensible.&quot;</span>
+<span class="del">-        : &quot;Recording the close-out keeps the report complete and defensible.&quot;,</span>
+<span class="add">+      data.itemListUrl</span>
+<span class="add">+        ? data.attachment</span>
+<span class="add">+          ? &quot;A PDF of this item is attached. Recording the close-out keeps the report complete and defensible.&quot;</span>
+<span class="add">+          : &quot;Recording the close-out keeps the report complete and defensible.&quot;</span>
+<span class="add">+        : &quot;Reply to this email with an update on this item and the surveyor will record the close-out.&quot;,</span>
+     ),
+   ].join(&quot;&quot;));
+<span class="add">+</span>
+   const text = textShell([
+     `${itemLabel(data.ref)} is overdue`,
+     &quot;&quot;,
+<span class="meta">@@ -487,7 +513,9 @@ function renderCloseOut(data: CloseOutPayload): RenderedEmail {</span>
+     `Required action: ${data.requiredAction}`,
+     `Target date: ${data.targetDate ?? &quot;Not set&quot;}`,
+     &quot;&quot;,
+<span class="del">-    `Update this item: ${data.itemListUrl}`,</span>
+<span class="add">+    ...(data.itemListUrl</span>
+<span class="add">+      ? [`Update this item: ${data.itemListUrl}`]</span>
+<span class="add">+      : [&quot;Reply to this email with an update on this item.&quot;]),</span>
+     ...(data.attachment ? [&quot;&quot;, &quot;A PDF of this item is attached.&quot;] : []),
+   ]);
+   return { subject, html, text, attachments: data.attachment ? [data.attachment] : [] };
+<span class="meta">diff --git a/src/lib/report/report-data.ts b/src/lib/report/report-data.ts</span>
+<span class="meta">index f6c9297..9ced8a1 100644</span>
+<span class="meta">--- a/src/lib/report/report-data.ts</span>
+<span class="meta">+++ b/src/lib/report/report-data.ts</span>
+<span class="meta">@@ -381,17 +381,63 @@ export type FindingPatch = Partial&lt;{</span>
+   lifecycle_updated_at: string | null;
+ }&gt;;
+ 
+<span class="add">+/**</span>
+<span class="add">+ * The fields that carry the content a person is vouching for when they confirm</span>
+<span class="add">+ * an item. Editing any of them withdraws the approval, because the approval was</span>
+<span class="add">+ * about that wording, that remedy, that severity.</span>
+<span class="add">+ *</span>
+<span class="add">+ * Deliberately NOT here: assignment and dates. &quot;This is a bricklayer&#x27;s job&quot; and</span>
+<span class="add">+ * &quot;it is due on Friday&quot; are decisions about routing and programme, not about</span>
+<span class="add">+ * whether the description is true -- and treating allocation as approval of the</span>
+<span class="add">+ * wording is the defect this list exists to stop.</span>
+<span class="add">+ */</span>
+<span class="add">+export const MATERIAL_CONTENT_FIELDS = [</span>
+<span class="add">+  &quot;finding_text&quot;,</span>
+<span class="add">+  &quot;snag_title&quot;,</span>
+<span class="add">+  &quot;remedial_text&quot;,</span>
+<span class="add">+  &quot;rectification_alt&quot;,</span>
+<span class="add">+  &quot;tradesman_hack&quot;,</span>
+<span class="add">+  &quot;hs_notes&quot;,</span>
+<span class="add">+  &quot;likely_cause&quot;,</span>
+<span class="add">+  &quot;capture_fields&quot;,</span>
+<span class="add">+  &quot;severity&quot;,</span>
+<span class="add">+  &quot;condition_grade&quot;,</span>
+<span class="add">+  &quot;regulatory_reference&quot;,</span>
+<span class="add">+] as const;</span>
+<span class="add">+</span>
+<span class="add">+/** Does this patch change what the item SAYS, as opposed to where it is routed? */</span>
+<span class="add">+export function withdrawsConfirmation(patch: FindingPatch): boolean {</span>
+<span class="add">+  return MATERIAL_CONTENT_FIELDS.some((field) =&gt; patch[field] !== undefined);</span>
+<span class="add">+}</span>
+<span class="add">+</span>
+ export async function updateFinding(
+   reportId: string,
+   findingId: string,
+   patch: FindingPatch,
+   before: Record&lt;string, unknown&gt;,
+<span class="add">+  /**</span>
+<span class="add">+   * Named so that allocation reads as allocation in the audit trail. Without</span>
+<span class="add">+   * this every write looks like &quot;finding.update&quot; and the record cannot tell a</span>
+<span class="add">+   * trade decision from a wording correction.</span>
+<span class="add">+   */</span>
+<span class="add">+  auditAction: string = &quot;finding.update&quot;,</span>
+ ): Promise&lt;void&gt; {
+<span class="add">+  // The rule lives here, in the one write path, rather than on each screen. A</span>
+<span class="add">+  // screen can be forgotten; this cannot.</span>
+<span class="add">+  //</span>
+<span class="add">+  // A patch that states its own confirmation is a confirmation and keeps it --</span>
+<span class="add">+  // that is what the review screen sends when a person approves an item.</span>
+<span class="add">+  const withdraw: FindingPatch =</span>
+<span class="add">+    withdrawsConfirmation(patch) &amp;&amp; patch.confirmed_at === undefined</span>
+<span class="add">+      ? { confirmed_at: null, confirmed_by: null }</span>
+<span class="add">+      : {};</span>
+<span class="add">+  const next: FindingPatch = { ...patch, ...withdraw };</span>
+<span class="add">+</span>
+   const { error } = await from(&quot;findings&quot;)
+<span class="del">-    .update({ ...patch, human_edited: true })</span>
+<span class="add">+    .update({ ...next, human_edited: true })</span>
+     .eq(&quot;id&quot;, findingId);
+   if (error) throw new DataError(error.message, error.code, error.hint, error.details);
+<span class="del">-  await writeAudit({ reportId, findingId, action: &quot;finding.update&quot;, before, after: patch });</span>
+<span class="add">+  await writeAudit({ reportId, findingId, action: auditAction, before, after: next });</span>
+ }
+ 
+ /**
+<span class="meta">diff --git a/src/lib/report/share-access.ts b/src/lib/report/share-access.ts</span>
+new file mode 100644
+<span class="meta">index 0000000..1c30e44</span>
+<span class="meta">--- /dev/null</span>
+<span class="meta">+++ b/src/lib/report/share-access.ts</span>
+<span class="meta">@@ -0,0 +1,47 @@</span>
+<span class="add">+/**</span>
+<span class="add">+ * Who may read a share link, and what they get.</span>
+<span class="add">+ *</span>
+<span class="add">+ * This exists because the rule was in the wrong place. The public endpoint</span>
+<span class="add">+ * checked the report&#x27;s status on the manual-photographic branch only, so an</span>
+<span class="add">+ * ordinary report&#x27;s link served live content whatever its status -- including</span>
+<span class="add">+ * after `reopenReport` set the report back to `in_review`, which is what</span>
+<span class="add">+ * happens the moment you reopen a published report to correct one line. Every</span>
+<span class="add">+ * link already in a client&#x27;s inbox then served the working copy.</span>
+<span class="add">+ *</span>
+<span class="add">+ * The rule, stated once and testable:</span>
+<span class="add">+ *   nothing outside the organisation reads a report that is not published.</span>
+<span class="add">+ *</span>
+<span class="add">+ * A manual photographic report additionally has no review page to serve -- it</span>
+<span class="add">+ * is shared as the finished PDF only -- but that is a shape decision, not an</span>
+<span class="add">+ * access one, so it is kept separate on purpose.</span>
+<span class="add">+ */</span>
+<span class="add">+export type ShareAccessInput = {</span>
+<span class="add">+  /** The report&#x27;s own `status` column, exactly as stored. */</span>
+<span class="add">+  status: string | null;</span>
+<span class="add">+  /** True for a manual photographic report: PDF only, never a review page. */</span>
+<span class="add">+  manualOnly: boolean;</span>
+<span class="add">+};</span>
+<span class="add">+</span>
+<span class="add">+export type ShareAccessDecision =</span>
+<span class="add">+  | { allowed: true; pdfOnly: boolean }</span>
+<span class="add">+  | { allowed: false; httpStatus: number; reason: string; error: string };</span>
+<span class="add">+</span>
+<span class="add">+/** The one status that means &quot;this report is published&quot;. */</span>
+<span class="add">+export const ISSUED_STATUS = &quot;issued&quot;;</span>
+<span class="add">+</span>
+<span class="add">+/**</span>
+<span class="add">+ * Deliberately not 403: to a link holder there is no difference between a</span>
+<span class="add">+ * report that does not exist and one that is not published, and saying which</span>
+<span class="add">+ * would confirm that a guessed token is real.</span>
+<span class="add">+ */</span>
+<span class="add">+export function shareAccessDecision(input: ShareAccessInput): ShareAccessDecision {</span>
+<span class="add">+  if (input.status !== ISSUED_STATUS) {</span>
+<span class="add">+    return {</span>
+<span class="add">+      allowed: false,</span>
+<span class="add">+      httpStatus: 404,</span>
+<span class="add">+      reason: &quot;unpublished&quot;,</span>
+<span class="add">+      error: &quot;This report is not currently published.&quot;,</span>
+<span class="add">+    };</span>
+<span class="add">+  }</span>
+<span class="add">+  return { allowed: true, pdfOnly: input.manualOnly };</span>
+<span class="add">+}</span>
+<span class="meta">diff --git a/src/routes/_authenticated/reports.$id.index.tsx b/src/routes/_authenticated/reports.$id.index.tsx</span>
+<span class="meta">index 925670a..3639a62 100644</span>
+<span class="meta">--- a/src/routes/_authenticated/reports.$id.index.tsx</span>
+<span class="meta">+++ b/src/routes/_authenticated/reports.$id.index.tsx</span>
+<span class="meta">@@ -199,7 +199,6 @@ function ReportWorkspace() {</span>
+    */
+   const onAssignTrade = async (findingId: string, assignment: TradeAssignment) =&gt; {
+     const before = (findings.data ?? []).find((item) =&gt; item.id === findingId);
+<span class="del">-    const { data: user } = await supabase.auth.getUser();</span>
+     const confirmedAt = new Date();
+     const snapshot = query.data?.report.surveyTypeSnapshot ?? null;
+     const derived = deriveDueDate(snapshot, before?.severity ?? null, confirmedAt);
+<span class="meta">@@ -213,8 +212,6 @@ function ReportWorkspace() {</span>
+         due_date: dueDate,
+         due_date_overridden:
+           assignment.dueDateOverridden &amp;&amp; dueDate !== derived.dueDate,
+<span class="del">-        confirmed_at: confirmedAt.toISOString(),</span>
+<span class="del">-        confirmed_by: user.user?.id ?? null,</span>
+         lifecycle_state: assignment.trade
+           ? stateAfterAssignment(before?.lifecycleState)
+           : &quot;open&quot;,
+<span class="meta">@@ -224,6 +221,10 @@ function ReportWorkspace() {</span>
+         ai_suggested_trade: before?.aiSuggestedTrade ?? null,
+         due_date: before?.dueDate ?? null,
+       },
+<span class="add">+      // Allocation is not approval of the wording. It used to write</span>
+<span class="add">+      // confirmed_at/confirmed_by here, which quietly satisfied the publish</span>
+<span class="add">+      // gate: a report could be issued asserting every item had been read.</span>
+<span class="add">+      &quot;finding.allocate&quot;,</span>
+     );
+     await refresh();
+   };
+<span class="meta">@@ -235,7 +236,6 @@ function ReportWorkspace() {</span>
+    */
+   const assignTradeToMany = async (findingIds: string[], trade: string) =&gt; {
+     if (findingIds.length === 0) return;
+<span class="del">-    const { data: user } = await supabase.auth.getUser();</span>
+     const confirmedAt = new Date();
+     const snapshot = query.data?.report.surveyTypeSnapshot ?? null;
+     const all = findings.data ?? [];
+<span class="meta">@@ -250,8 +250,6 @@ function ReportWorkspace() {</span>
+         {
+           assigned_trade: trade,
+           due_date: before.dueDateOverridden ? (before.dueDate ?? null) : derived.dueDate,
+<span class="del">-          confirmed_at: confirmedAt.toISOString(),</span>
+<span class="del">-          confirmed_by: user.user?.id ?? null,</span>
+           lifecycle_state: stateAfterAssignment(before.lifecycleState),
+         },
+         {
+<span class="meta">@@ -259,6 +257,9 @@ function ReportWorkspace() {</span>
+           ai_suggested_trade: before.aiSuggestedTrade ?? null,
+           due_date: before.dueDate ?? null,
+         },
+<span class="add">+        // Same rule as the single assignment above: routing a batch of items is</span>
+<span class="add">+        // not reading them. This path used to write confirmed_at too.</span>
+<span class="add">+        &quot;finding.allocate&quot;,</span>
+       );
+     }
+     await refresh();
+<span class="meta">diff --git a/src/routes/api/public/shared-report.$token.ts b/src/routes/api/public/shared-report.$token.ts</span>
+<span class="meta">index 337ee5f..fdfc8db 100644</span>
+<span class="meta">--- a/src/routes/api/public/shared-report.$token.ts</span>
+<span class="meta">+++ b/src/routes/api/public/shared-report.$token.ts</span>
+<span class="meta">@@ -1,5 +1,7 @@</span>
+ import { createFileRoute } from &quot;@tanstack/react-router&quot;;
+ 
+<span class="add">+import { shareAccessDecision } from &quot;@/lib/report/share-access&quot;;</span>
+<span class="add">+</span>
+ /**
+  * Read-only share link. No account is needed, so this endpoint does the work
+  * that RLS would otherwise do: it validates the token, checks the expiry, and
+<span class="meta">@@ -90,15 +92,24 @@ export const Route = createFileRoute(&quot;/api/public/shared-report/$token&quot;)({</span>
+         const rawReport = reports?.[0];
+         if (!rawReport) return Response.json({ error: &quot;Report not found.&quot; }, { status: 404 });
+ 
+<span class="add">+        // One rule, stated once: nothing outside the organisation reads a report</span>
+<span class="add">+        // that is not published. The status check used to live inside the manual</span>
+<span class="add">+        // branch only, so an ordinary report&#x27;s link served live content whatever</span>
+<span class="add">+        // its status -- including the working copy after `reopenReport`.</span>
+<span class="add">+        const access = shareAccessDecision({</span>
+<span class="add">+          status: (rawReport.status as string | null) ?? null,</span>
+<span class="add">+          manualOnly: rawReport.survey_type_snapshot?.manualOnly === true,</span>
+<span class="add">+        });</span>
+<span class="add">+        if (!access.allowed) {</span>
+<span class="add">+          return Response.json(</span>
+<span class="add">+            { reason: access.reason, error: access.error },</span>
+<span class="add">+            { status: access.httpStatus },</span>
+<span class="add">+          );</span>
+<span class="add">+        }</span>
+<span class="add">+</span>
+         // Manual photographic reports are shared as the finished PDF only —
+         // no review page, so no report content leaves through this endpoint.
+<span class="del">-        if (rawReport.survey_type_snapshot?.manualOnly === true) {</span>
+<span class="del">-          if (rawReport.status !== &quot;issued&quot;) {</span>
+<span class="del">-            return Response.json(</span>
+<span class="del">-              { reason: &quot;unknown&quot;, error: &quot;This report is not currently published.&quot; },</span>
+<span class="del">-              { status: 404 },</span>
+<span class="del">-            );</span>
+<span class="del">-          }</span>
+<span class="add">+        if (access.pdfOnly) {</span>
+           const { data: org } = await admin
+             .from(&quot;organisations&quot;)
+             .select(&quot;name&quot;)
+<span class="meta">diff --git a/supabase/migrations/20261011210000_report_share_version_pinning.sql b/supabase/migrations/20261011210000_report_share_version_pinning.sql</span>
+new file mode 100644
+<span class="meta">index 0000000..2767fe5</span>
+<span class="meta">--- /dev/null</span>
+<span class="meta">+++ b/supabase/migrations/20261011210000_report_share_version_pinning.sql</span>
+<span class="meta">@@ -0,0 +1,23 @@</span>
+<span class="add">+-- Share links pinned to an issued version.</span>
+<span class="add">+--</span>
+<span class="add">+-- Publishing already freezes the report into report_versions, but report_shares</span>
+<span class="add">+-- had no way to say WHICH version a link points at. So the public page read live</span>
+<span class="add">+-- tables, and a link could quietly change its contents after it was sent --</span>
+<span class="add">+-- including showing the working copy the moment a report was reopened.</span>
+<span class="add">+--</span>
+<span class="add">+-- Additive and backwards compatible. Existing rows keep version_id NULL and the</span>
+<span class="add">+-- reader falls back to the report&#x27;s current version at read time. Nothing is</span>
+<span class="add">+-- backfilled: guessing a version for an old link would be worse than resolving</span>
+<span class="add">+-- it at read time.</span>
+<span class="add">+--</span>
+<span class="add">+-- NOT APPLIED YET. The code that writes and reads this column must not ship</span>
+<span class="add">+-- before this migration has run, or every share link will break on a missing</span>
+<span class="add">+-- column. Apply deliberately, then land the pinning code.</span>
+<span class="add">+</span>
+<span class="add">+alter table public.report_shares</span>
+<span class="add">+  add column if not exists version_id uuid references public.report_versions(id) on delete set null;</span>
+<span class="add">+</span>
+<span class="add">+comment on column public.report_shares.version_id is</span>
+<span class="add">+  &#x27;The issued report version this link serves. NULL on links minted before version pinning; those resolve to the report&#x27;&#x27;s current version at read time.&#x27;;</span>
+<span class="add">+</span>
+<span class="add">+create index if not exists report_shares_version_idx on public.report_shares(version_id);</span></pre>
+</body></html>
