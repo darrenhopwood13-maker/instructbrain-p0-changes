@@ -22,23 +22,25 @@
 <div class="bar"><span></span></div>
 <header>
   <h1>instructBrain report integrity - the diffs</h1>
-  <div class="sub">Branch <code>p0/report-integrity</code>, commit b767986 - not pushed, not published</div>
+  <div class="sub">Branch <code>p0/report-integrity</code>, 2 commits (0478f29 latest) - not pushed, product not republished</div>
 </header>
 <div class="note">
-  <b>Nothing here is live.</b> This is a local branch. The four changes run with no database change.
-  The one migration file included is <b>not applied</b>, and the code that would use it is deliberately not written yet.
+  <b>Nothing here is pushed.</b> This is a local branch; the live product still runs the old code.
+  <b>The database migration HAS been applied</b> to the live project and verified at source:
+  <code>report_shares.version_id</code> is uuid, foreign key to <code>report_versions.id</code>, indexed,
+  and all 16 existing links are intact. Two commits: the four code changes, then the version pinning.
 </div>
 <h3 style="padding:0 16px;color:#0B2038;margin:6px 0 0">What changed, by file</h3>
-<div class="stat"> .../__tests__/confirmation-invalidation.test.ts    | 65 ++++++++++++++++++++++
- src/lib/__tests__/share-access.test.ts             | 50 +++++++++++++++++
- src/lib/email/email.server.ts                      | 34 +++++++++--
- src/lib/email/templates.ts                         | 48 ++++++++++++----
- src/lib/report/report-data.ts                      | 50 ++++++++++++++++-
- src/lib/report/share-access.ts                     | 47 ++++++++++++++++
- src/routes/_authenticated/reports.$id.index.tsx    | 13 +++--
- src/routes/api/public/shared-report.$token.ts      | 25 ++++++---
- ...20261011210000_report_share_version_pinning.sql | 23 ++++++++
- 9 files changed, 325 insertions(+), 30 deletions(-)
+<div class="stat"> .../__tests__/confirmation-invalidation.test.ts    | 65 +++++++++++++++
+ src/lib/__tests__/share-access.test.ts             | 50 ++++++++++++
+ src/lib/email/email.server.ts                      | 53 ++++++++++--
+ src/lib/email/templates.ts                         | 48 ++++++++---
+ src/lib/report/report-data.ts                      | 95 ++++++++++++++++++++--
+ src/lib/report/share-access.ts                     | 47 +++++++++++
+ src/routes/_authenticated/reports.$id.index.tsx    | 13 +--
+ src/routes/api/public/shared-report.$token.ts      | 25 ++++--
+ ...20261011210000_report_share_version_pinning.sql | 23 ++++++
+ 9 files changed, 385 insertions(+), 34 deletions(-)
 </div>
 <pre><span class="meta">diff --git a/src/lib/__tests__/confirmation-invalidation.test.ts b/src/lib/__tests__/confirmation-invalidation.test.ts</span>
 new file mode 100644
@@ -168,7 +170,7 @@ new file mode 100644
 <span class="add">+  });</span>
 <span class="add">+});</span>
 <span class="meta">diff --git a/src/lib/email/email.server.ts b/src/lib/email/email.server.ts</span>
-<span class="meta">index 04d32c0..c13ded7 100644</span>
+<span class="meta">index 04d32c0..781b644 100644</span>
 <span class="meta">--- a/src/lib/email/email.server.ts</span>
 <span class="meta">+++ b/src/lib/email/email.server.ts</span>
 <span class="meta">@@ -348,12 +348,21 @@ export async function sendReportSharedEmail(</span>
@@ -194,7 +196,47 @@ new file mode 100644
    const { data: share } = await db
      .from(&quot;report_shares&quot;)
      .select(&quot;token, expires_at, revoked_at&quot;)
-<span class="meta">@@ -693,6 +702,10 @@ export async function sendTradeExtractEmail(</span>
+<span class="meta">@@ -608,6 +617,17 @@ async function ensureShareLink(</span>
+   }
+ 
+   const expires = new Date(Date.now() + 30 * 86_400_000).toISOString();
+<span class="add">+</span>
+<span class="add">+  // Pinned to the version in force at mint time, the same way the Share menu</span>
+<span class="add">+  // does it, so both routes record the same fact about what the client was sent.</span>
+<span class="add">+  const { data: versionRows } = await db</span>
+<span class="add">+    .from(&quot;report_versions&quot;)</span>
+<span class="add">+    .select(&quot;id, version&quot;)</span>
+<span class="add">+    .eq(&quot;report_id&quot;, reportId)</span>
+<span class="add">+    .order(&quot;version&quot;, { ascending: false })</span>
+<span class="add">+    .limit(1);</span>
+<span class="add">+  const versionId = ((versionRows ?? []) as Array&lt;{ id: string }&gt;)[0]?.id ?? null;</span>
+<span class="add">+</span>
+   const { data: created, error } = await db
+     .from(&quot;report_shares&quot;)
+     .insert({
+<span class="meta">@@ -616,6 +636,7 @@ async function ensureShareLink(</span>
+       token: shareToken(),
+       label: &quot;Sent by email&quot;,
+       expires_at: expires,
+<span class="add">+      version_id: versionId,</span>
+     })
+     .select(&quot;id, token&quot;)
+     .single();
+<span class="meta">@@ -627,7 +648,12 @@ async function ensureShareLink(</span>
+     actor_id: null,
+     action: &quot;report.share_created&quot;,
+     before: null,
+<span class="del">-    after: { share_id: share.id, expires_at: expires, via: &quot;trade_extract_send&quot; },</span>
+<span class="add">+    after: {</span>
+<span class="add">+      share_id: share.id,</span>
+<span class="add">+      expires_at: expires,</span>
+<span class="add">+      version_id: versionId,</span>
+<span class="add">+      via: &quot;trade_extract_send&quot;,</span>
+<span class="add">+    },</span>
+   });
+   return shareUrlForToken(share.token);
+ }
+<span class="meta">@@ -693,6 +719,10 @@ export async function sendTradeExtractEmail(</span>
        items,
        itemListUrl: link?.url ?? null,
        itemListIsReadOnly: link?.readOnly ?? false,
@@ -205,7 +247,7 @@ new file mode 100644
        sentByName: await senderNameFor(row[&quot;author_id&quot;] as string | null, actor.claims, &quot;Your surveyor&quot;),
        attachment,
      },
-<span class="meta">@@ -733,7 +746,7 @@ export async function sendCloseOutRequestEmail(</span>
+<span class="meta">@@ -733,7 +763,7 @@ export async function sendCloseOutRequestEmail(</span>
  ): Promise&lt;SendOutcome&gt; {
    const { data: finding, error } = await db
      .from(&quot;findings&quot;)
@@ -214,7 +256,7 @@ new file mode 100644
      .eq(&quot;id&quot;, input.findingId)
      .single();
    if (error || !finding) throw new Error(&quot;That item could not be read, so nothing was sent.&quot;);
-<span class="meta">@@ -744,9 +757,10 @@ export async function sendCloseOutRequestEmail(</span>
+<span class="meta">@@ -744,9 +774,10 @@ export async function sendCloseOutRequestEmail(</span>
  
    const { data: report } = await db
      .from(&quot;reports&quot;)
@@ -226,7 +268,7 @@ new file mode 100644
    const fields = (row[&quot;capture_fields&quot;] ?? {}) as Record&lt;string, string&gt;;
  
    const { buildEmailPdf } = await import(&quot;@/lib/report/pdf-attachment.server&quot;);
-<span class="meta">@@ -755,6 +769,16 @@ export async function sendCloseOutRequestEmail(</span>
+<span class="meta">@@ -755,6 +786,16 @@ export async function sendCloseOutRequestEmail(</span>
      findingIds: [input.findingId],
    });
  
@@ -243,7 +285,7 @@ new file mode 100644
    const message: EmailMessage = {
      template: &quot;CLOSE_OUT_REQUEST&quot;,
      data: {
-<span class="meta">@@ -762,8 +786,8 @@ export async function sendCloseOutRequestEmail(</span>
+<span class="meta">@@ -762,8 +803,8 @@ export async function sendCloseOutRequestEmail(</span>
        location: resolveLocation(fields) || &quot;Not recorded&quot;,
        requiredAction: (row[&quot;remedial_text&quot;] as string) || (row[&quot;finding_text&quot;] as string) || &quot;&quot;,
        targetDate: (row[&quot;due_date&quot;] as string | null) ?? null,
@@ -359,7 +401,7 @@ new file mode 100644
    ]);
    return { subject, html, text, attachments: data.attachment ? [data.attachment] : [] };
 <span class="meta">diff --git a/src/lib/report/report-data.ts b/src/lib/report/report-data.ts</span>
-<span class="meta">index f6c9297..9ced8a1 100644</span>
+<span class="meta">index f6c9297..05376e8 100644</span>
 <span class="meta">--- a/src/lib/report/report-data.ts</span>
 <span class="meta">+++ b/src/lib/report/report-data.ts</span>
 <span class="meta">@@ -381,17 +381,63 @@ export type FindingPatch = Partial&lt;{</span>
@@ -428,6 +470,89 @@ new file mode 100644
  }
  
  /**
+<span class="meta">@@ -510,15 +556,48 @@ export type ShareLink = {</span>
+   label: string | null;
+   expires_at: string | null;
+   revoked_at: string | null;
+<span class="add">+  /**</span>
+<span class="add">+   * The issued report version this link was minted against, or null for a link</span>
+<span class="add">+   * created before version pinning existed.</span>
+<span class="add">+   *</span>
+<span class="add">+   * Recorded on mint. NOT YET READ by the public endpoint, on purpose: serving</span>
+<span class="add">+   * a link from its frozen version needs a mapper from the stored document</span>
+<span class="add">+   * shape to the public payload shape, and a mapper that is subtly wrong shows</span>
+<span class="add">+   * a client the WRONG report -- a worse failure than showing the current</span>
+<span class="add">+   * published one. The safety half (refusing to serve anything unpublished) is</span>
+<span class="add">+   * in place via share-access.ts; this column is the raw material for the</span>
+<span class="add">+   * fidelity half.</span>
+<span class="add">+   */</span>
+<span class="add">+  version_id: string | null;</span>
+ };
+ 
+<span class="add">+/** The id of the version the report currently points at, or null if it has none. */</span>
+<span class="add">+async function currentVersionId(reportId: string): Promise&lt;string | null&gt; {</span>
+<span class="add">+  const { data: reports } = await from(&quot;reports&quot;)</span>
+<span class="add">+    .select(&quot;current_version&quot;)</span>
+<span class="add">+    .eq(&quot;id&quot;, reportId)</span>
+<span class="add">+    .limit(1);</span>
+<span class="add">+  // 0 and null both mean &quot;never issued&quot; -- issueReport numbers versions from 1.</span>
+<span class="add">+  // A draft therefore has nothing to pin to, which is correct: a link cannot be</span>
+<span class="add">+  // pinned to a version that was never written.</span>
+<span class="add">+  const current = (reports as Array&lt;{ current_version: number | null }&gt; | null)?.[0]?.current_version;</span>
+<span class="add">+  if (!current) return null;</span>
+<span class="add">+</span>
+<span class="add">+  const { data: versions } = await from(&quot;report_versions&quot;)</span>
+<span class="add">+    .select(&quot;id&quot;)</span>
+<span class="add">+    .eq(&quot;report_id&quot;, reportId)</span>
+<span class="add">+    .eq(&quot;version&quot;, current)</span>
+<span class="add">+    .limit(1);</span>
+<span class="add">+  return (versions as Array&lt;{ id: string }&gt; | null)?.[0]?.id ?? null;</span>
+<span class="add">+}</span>
+<span class="add">+</span>
+ export const reportSharesQuery = (reportId: string) =&gt;
+   queryOptions({
+     queryKey: [&quot;report-shares&quot;, reportId],
+     queryFn: async (): Promise&lt;ShareLink[]&gt; =&gt;
+       unwrap(
+         await from(&quot;report_shares&quot;)
+<span class="del">-          .select(&quot;id, token, label, expires_at, revoked_at&quot;)</span>
+<span class="add">+          .select(&quot;id, token, label, expires_at, revoked_at, version_id&quot;)</span>
+           .eq(&quot;report_id&quot;, reportId)
+           .order(&quot;created_at&quot;, { ascending: false }),
+       ) as ShareLink[],
+<span class="meta">@@ -540,6 +619,11 @@ export async function createShareLink(input: {</span>
+   const { data: userData } = await supabase.auth.getUser();
+   const expires =
+     input.days === null ? null : new Date(Date.now() + input.days * 86_400_000).toISOString();
+<span class="add">+  // Pin the link to the version in force at the moment it is minted. Recorded</span>
+<span class="add">+  // now so that &quot;what did this client actually see&quot; becomes answerable; the</span>
+<span class="add">+  // public endpoint still reads live content until the frozen-document reader</span>
+<span class="add">+  // lands (see the note on ShareLink.version_id).</span>
+<span class="add">+  const versionId = await currentVersionId(input.reportId);</span>
+   const { data, error } = await from(&quot;report_shares&quot;)
+     .insert({
+       report_id: input.reportId,
+<span class="meta">@@ -547,9 +631,10 @@ export async function createShareLink(input: {</span>
+       token: shareToken(),
+       label: input.label ?? null,
+       expires_at: expires,
+<span class="add">+      version_id: versionId,</span>
+       created_by: userData.user?.id ?? null,
+     })
+<span class="del">-    .select(&quot;id, token, label, expires_at, revoked_at&quot;)</span>
+<span class="add">+    .select(&quot;id, token, label, expires_at, revoked_at, version_id&quot;)</span>
+     .single();
+   if (error) throw new DataError(error.message, error.code, error.hint, error.details);
+   const share = data as ShareLink;
+<span class="meta">@@ -557,7 +642,7 @@ export async function createShareLink(input: {</span>
+     reportId: input.reportId,
+     action: &quot;report.share_created&quot;,
+     before: null,
+<span class="del">-    after: { share_id: share.id, expires_at: expires },</span>
+<span class="add">+    after: { share_id: share.id, expires_at: expires, version_id: versionId },</span>
+   });
+   return share;
+ }
 <span class="meta">diff --git a/src/lib/report/share-access.ts b/src/lib/report/share-access.ts</span>
 new file mode 100644
 <span class="meta">index 0000000..1c30e44</span>
