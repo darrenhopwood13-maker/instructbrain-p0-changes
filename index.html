@@ -102,9 +102,19 @@
   h2.section,h3{ break-after:avoid; }
 
   .stamp{ border:2px solid var(--red); color:var(--red); border-radius:6px; padding:8px 11px; font-weight:bold; font-size:10pt; text-align:center; margin:12px 0 0 0; letter-spacing:0.3px; }
+
+  /* screen-only bar with the PDF download; never appears on the printed page */
+  .dl{ position:sticky; top:0; z-index:9; background:var(--navy); color:#fff; padding:9px 14px; font-size:10pt; display:flex; justify-content:space-between; align-items:center; }
+  .dl a{ color:var(--lime); font-weight:bold; text-decoration:none; border:1px solid var(--lime); border-radius:5px; padding:4px 10px; }
+  @media print{ .dl{ display:none !important; } }
 </style>
 </head>
 <body>
+
+<div class="dl">
+  <span>instructBrain - report integrity: the six changes &nbsp;|&nbsp; proposal, not applied</span>
+  <a href="instructbrain-report-integrity-changes.pdf">Download the PDF</a>
+</div>
 
 <!-- ============================= COVER ============================= -->
 <section class="page cover">
