@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>instructBrain - report integrity: exactly what we are changing</title>
+<style>
+  :root{
+    --navy:#0B2038;
+    --navy-soft:#16304F;
+    --lime:#57FF00;
+    --ink:#12202E;
+    --muted:#5A6B7C;
+    --line:#D9E1E8;
+    --paper:#FFFFFF;
+    --wash:#F4F7FA;
+    --amber:#B7791F;
+    --red:#B4231F;
+    --green-ink:#1F7A3D;
+  }
+  @page{ size:A4; margin:14mm 14mm 16mm 14mm; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:"Liberation Sans",Arial,Helvetica,sans-serif;
+    color:var(--ink);
+    font-size:10.6pt;
+    line-height:1.5;
+    background:var(--paper);
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  h1,h2,h3,h4{ margin:0; font-weight:bold; color:var(--navy); line-height:1.2; }
+  p{ margin:0 0 7px 0; }
+  ul{ margin:4px 0 8px 0; padding-left:16px; }
+  li{ margin:0 0 3px 0; }
+  strong{ color:var(--navy); }
+  code{ font-family:"Liberation Mono","DejaVu Sans Mono",monospace; font-size:9pt; background:var(--wash); padding:1px 3px; border-radius:3px; color:var(--navy-soft); }
+  .page{ page-break-after:always; }
+  .page:last-child{ page-break-after:auto; }
+
+  .bar{ height:9px; background:var(--navy); margin:0 0 14px 0; }
+  .bar span{ display:block; height:9px; width:34%; background:var(--lime); }
+
+  .cover{ padding-top:26mm; }
+  .wordmark{ font-size:27pt; color:var(--navy); font-weight:bold; letter-spacing:-0.5px; }
+  .wordmark b{ color:#3FA300; }
+  .cover h1{ font-size:25pt; margin-top:16mm; letter-spacing:-0.4px; }
+  .cover .sub{ font-size:13pt; color:var(--muted); margin-top:6px; }
+  .cover .box{ margin-top:14mm; border:2px solid var(--navy); border-radius:8px; overflow:hidden; }
+  .cover .box .top{ background:var(--navy); color:#fff; padding:7px 12px; font-weight:bold; font-size:10.5pt; }
+  .cover .box .body{ padding:11px 12px; }
+  .meta{ margin-top:12mm; font-size:9.4pt; color:var(--muted); }
+  .meta b{ color:var(--navy); }
+
+  .kicker{ font-size:8.6pt; letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); font-weight:bold; margin-bottom:4px; }
+  h2.section{ font-size:16pt; margin:0 0 3px 0; }
+  .rule{ height:3px; background:var(--lime); width:52px; margin:7px 0 12px 0; }
+  h3{ font-size:12pt; margin:13px 0 4px 0; }
+  h4{ font-size:10.4pt; margin:10px 0 3px 0; }
+
+  .card{ border:1px solid var(--line); border-radius:7px; padding:10px 12px; margin:9px 0; background:var(--paper); }
+  .card.tint{ background:var(--wash); }
+  .callout{ border-left:5px solid var(--lime); background:var(--wash); border-radius:0 7px 7px 0; padding:9px 12px; margin:10px 0; }
+  .callout.warn{ border-left-color:var(--amber); }
+  .callout.stop{ border-left-color:var(--red); }
+  .callout .t{ font-weight:bold; color:var(--navy); display:block; margin-bottom:2px; }
+
+  .pill{ display:inline-block; font-size:8.4pt; font-weight:bold; padding:2px 7px; border-radius:99px; border:1px solid; white-space:nowrap; }
+  .pill.bad{ color:var(--red); border-color:var(--red); background:#FDF2F2; }
+  .pill.ok{ color:var(--green-ink); border-color:var(--green-ink); background:#F1FAF4; }
+  .pill.amber{ color:var(--amber); border-color:var(--amber); background:#FDF8EF; }
+  .pill.grey{ color:var(--muted); border-color:var(--line); background:var(--wash); }
+
+  table{ width:100%; border-collapse:collapse; margin:8px 0 10px 0; font-size:9.8pt; }
+  th{ text-align:left; background:var(--navy); color:#fff; padding:6px 8px; font-size:9.2pt; }
+  td{ padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:nth-child(even) td{ background:var(--wash); }
+  td.n{ width:26px; color:var(--muted); font-weight:bold; }
+
+  .cols{ display:flex; gap:12px; }
+  .cols > div{ flex:1; }
+  .now,.after{ border-radius:7px; padding:9px 11px; border:1px solid var(--line); }
+  .now{ background:#FDF2F2; border-color:#EFC9C7; }
+  .after{ background:#F1FAF4; border-color:#BFE3CB; }
+  .now .h,.after .h{ font-weight:bold; font-size:9.6pt; margin-bottom:4px; }
+  .now .h{ color:var(--red); }
+  .after .h{ color:var(--green-ink); }
+
+  .chg{ border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:0 0 12px 0; break-inside:avoid; }
+  .chg .hd{ display:flex; align-items:center; gap:10px; background:var(--navy); color:#fff; padding:7px 11px; }
+  .chg .hd .num{ background:var(--lime); color:var(--navy); font-weight:bold; font-size:10pt; width:22px; height:22px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .chg .hd .ttl{ font-weight:bold; font-size:11.4pt; }
+  .chg .bd{ padding:10px 12px; }
+  .chg.plain .hd{ background:#3E5A78; }
+  .chg .bd .why{ font-size:9.9pt; color:var(--muted); margin-bottom:7px; }
+
+  .foot{ font-size:8.6pt; color:var(--muted); border-top:1px solid var(--line); padding-top:6px; margin-top:12px; }
+  table.tight{ font-size:9pt; }
+  table.tight td{ padding:4px 7px; }
+  table.tight th{ padding:5px 7px; font-size:8.8pt; }
+  .avoid{ break-inside:avoid; }
+  h2.section,h3{ break-after:avoid; }
+
+  .stamp{ border:2px solid var(--red); color:var(--red); border-radius:6px; padding:8px 11px; font-weight:bold; font-size:10pt; text-align:center; margin:12px 0 0 0; letter-spacing:0.3px; }
+</style>
+</head>
+<body>
+
+<!-- ============================= COVER ============================= -->
+<section class="page cover">
+  <div class="bar"><span></span></div>
+  <div class="wordmark">instruct<b>Brain</b></div>
+
+  <h1>The six changes, and exactly<br>what each one does</h1>
+  <div class="sub">Report integrity: what changes, what you will notice, and what needs the database</div>
+
+  <div class="box">
+    <div class="top">The whole thing in five lines</div>
+    <div class="body">
+      <p>instructBrain builds and publishes reports well. The gap is <strong>proving what was sent, and that a person approved it</strong>.</p>
+      <p>Today a share link shows whatever the report says <em>right now</em>, and allocating a trade silently counts as confirming the wording. Both are fixable in a day.</p>
+      <p>Four of the six changes are code only. <strong>One needs a database change</strong>, which is why nothing here has been applied yet.</p>
+      <p>Nothing in this document has been built. Nothing is committed. Nothing has run against the live database.</p>
+    </div>
+  </div>
+
+  <div class="meta">
+    <p><b>Prepared for</b> Darren Hopwood &nbsp;|&nbsp; <b>Prepared by</b> Banksy, instructBrain agent account</p>
+    <p><b>Date</b> 11 October 2026 &nbsp;|&nbsp; <b>Product</b> instructBrain (instructbrain.com) &nbsp;|&nbsp; <b>Status</b> proposal - not applied</p>
+  </div>
+
+  <div class="foot">
+    Every file reference and line number in this document was read at commit <code>1d47100</code> on 11 October 2026, which is the tip of <code>main</code>. The findings are the ones Codex raised and I re-checked at source; where I disagree with Codex, it says so.
+  </div>
+</section>
+
+<!-- ============================= SHORT VERSION ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <div class="kicker">Section 1</div>
+  <h2 class="section">The six changes at a glance</h2>
+  <div class="rule"></div>
+
+  <p>Five findings came back from the review. Two are real launch blockers, one is a serious defect, two are design debt. Here is every change, in the order I would do them.</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:26px">#</th><th style="width:28%">Change</th><th style="width:17%">Type</th><th style="width:13%">Needs DB?</th><th>Size</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="n">1</td>
+        <td><strong>Share links stop showing live content</strong></td>
+        <td><span class="pill bad">Launch blocker</span></td>
+        <td>Yes - one column</td>
+        <td>Small</td>
+      </tr>
+      <tr>
+        <td class="n">2</td>
+        <td><strong>Confirming and allocating stop being the same thing</strong></td>
+        <td><span class="pill bad">Launch blocker</span></td>
+        <td>No</td>
+        <td>Small</td>
+      </tr>
+      <tr>
+        <td class="n">3</td>
+        <td><strong>The publish gate moves onto the server</strong></td>
+        <td><span class="pill amber">Serious defect</span></td>
+        <td>Yes - a function</td>
+        <td>Medium</td>
+      </tr>
+      <tr>
+        <td class="n">4</td>
+        <td><strong>Nothing external exists for an unpublished report</strong></td>
+        <td><span class="pill amber">Serious defect</span></td>
+        <td>No</td>
+        <td>Small</td>
+      </tr>
+      <tr>
+        <td class="n">5</td>
+        <td><strong>The close-out email link points somewhere a supplier can open</strong></td>
+        <td><span class="pill amber">Broken journey</span></td>
+        <td>No</td>
+        <td>One line</td>
+      </tr>
+      <tr>
+        <td class="n">6</td>
+        <td><strong>The reason for a recipient gets recorded</strong></td>
+        <td><span class="pill grey">Design debt</span></td>
+        <td>Yes - a column</td>
+        <td>Small</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>What you will actually notice as a user</h3>
+  <table class="tight">
+    <thead><tr><th style="width:38%">Today</th><th>After</th></tr></thead>
+    <tbody>
+      <tr><td>You reopen a published report to fix a typo, and a client holding last week's link sees your half-edited draft.</td><td>The client keeps seeing the version you sent. Your edits wait for the next version.</td></tr>
+      <tr><td>You assign "Bricklayer" to an item. It silently counts as you having read and approved the wording.</td><td>Assigning a trade does only that. Approving wording stays its own act, and an edit takes the approval back off.</td></tr>
+      <tr><td>Publish is blocked in the browser, but nothing stops the same action being sent straight to the database.</td><td>The database refuses it. The gate is no longer a suggestion.</td></tr>
+      <tr><td>A client email sent too early arrives with no link and no attachment - an empty envelope.</td><td>The send is refused, and says why. Nothing half-sent.</td></tr>
+      <tr><td>The close-out email tells a subcontractor to visit a page they cannot open without a login.</td><td>It links to their own trade page, which needs no account.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="t">The honest bit</span>
+    Changes 1 and 2 are the ones that matter. If you only ever did those two, the product would stop making promises it cannot keep. Changes 3 to 6 are tidying and hardening - worth doing, not worth delaying a launch for.
+  </div>
+</section>
+
+<!-- ============================= CHANGE 1 ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <div class="kicker">Section 2 - the two that matter</div>
+  <h2 class="section">Change 1: share links stop showing live content</h2>
+  <div class="rule"></div>
+
+  <p><strong>What is wrong now.</strong> Publishing does freeze a copy of the report - that part is done properly. But the public link never reads it. It reads the live tables, so the link always shows the current state of the report, not the state you sent.</p>
+
+  <div class="cols">
+    <div>
+      <div class="now">
+        <div class="h">Today</div>
+        <p>The public page loads <code>reports</code>, <code>findings</code> and <code>photos</code> live (<code>shared-report.$token.ts:61-88</code>). Only three things in the whole codebase read the frozen copy - the emailed PDF attachment, the version list, and the insert.</p>
+        <p>The share table has no version column at all (<code>report_shares</code>, migration <code>20260806181751</code>), so a link cannot be tied to one.</p>
+      </div>
+    </div>
+    <div>
+      <div class="after">
+        <div class="h">After</div>
+        <p>Minting a link records which version it points at. The public page serves that frozen copy.</p>
+        <p>A link can no longer drift, because it is no longer reading anything that can change.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout stop">
+    <span class="t">The sharper half, which the review missed and I found</span>
+    <p><code>reopenReport</code> (<code>report-data.ts:492-501</code>) sets the report back to <code>in_review</code>. The public page only checks status on the manual-report branch (<code>shared-report.$token.ts:93-101</code>).</p>
+    <p>So the moment you reopen a published report to fix one line, <strong>every link already in a client's inbox starts serving your working copy</strong>. Not stale evidence - unpublished draft content, presented as final, with nothing on the page to say so.</p>
+  </div>
+
+  <h3>Exactly what I change</h3>
+  <ul>
+    <li>Add <code>version_id</code> to <code>report_shares</code>, and set it when a link is minted (<code>createShareLink</code>, <code>report-data.ts:533-563</code>).</li>
+    <li>Serve the public page from that frozen version when it is set.</li>
+    <li><strong>Refuse to serve live content at all whenever the report is not published</strong> - for every report, not only the manual ones. This is the same rule already applied to the manual branch, applied to the other branch of the same page.</li>
+    <li>Old links with no version recorded: bind them to the report's current version on read, so they stop drifting too.</li>
+  </ul>
+
+  <div class="callout warn">
+    <span class="t">What this costs you</span>
+    During the window where you have a published report reopened for editing, a client clicking their link now sees a short "this report is not currently published" message instead of your draft. That is the correct trade - but it is a visible behaviour change, so I am telling you now rather than after.
+  </div>
+</section>
+
+<!-- ============================= CHANGE 2 ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <h2 class="section">Change 2: confirming and allocating stop being the same thing</h2>
+  <div class="rule"></div>
+
+  <p><strong>What is wrong now.</strong> There are two ideas here - "I have read this wording and I stand behind it" and "this is a bricklayer's job". The code treats them as one act.</p>
+
+  <table class="tight">
+    <thead><tr><th style="width:34%">What you do</th><th style="width:33%">What the code writes</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Edit the wording of a finding</td><td>Writes the text. <strong>Leaves the existing approval in place</strong></td><td><code>reports.$id.index.tsx:180-194</code></td></tr>
+      <tr><td>Assign a trade to one item</td><td>Writes <code>confirmed_at</code> and <code>confirmed_by</code> - records allocation as approval</td><td><code>:216-217</code></td></tr>
+      <tr><td>Assign a trade to many items</td><td>Same, once per item</td><td><code>:253-254</code></td></tr>
+      <tr><td>"Use all suggestions" in the organiser</td><td>Applies the below-threshold suggestions too, and they land on the same path</td><td><code>trade-organiser.tsx:130-152</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout stop">
+    <span class="t">Why this is a launch blocker, not tidying</span>
+    <p>Publishing is blocked on three things: an item not assessed, a failing item with no trade, and an item not confirmed (<code>document.ts:252-275</code>).</p>
+    <p>Allocating a trade clears two of the three at once, and Publish then lights up (<code>report-actions.tsx:512</code>). So a report can be issued <strong>asserting that every item was read and approved by a person, when nobody read the wording.</strong></p>
+    <p>On your own test data, read-only: 16 findings, 16 confirmed, 10 carrying trades - and all 10 trades identical to the AI's suggestion, 8 of them below the confidence the bulk path is supposed to refuse. Small sample, your test data, not proof of how customers behave. The mechanism is real and it has already been exercised.</p>
+  </div>
+
+  <h3>Exactly what I change</h3>
+  <ul>
+    <li><strong>Allocation stops writing <code>confirmed_at</code> and <code>confirmed_by</code>.</strong> It writes the trade and the due date, which is its own record, and gets its own name in the audit trail (<code>finding.allocate</code> rather than a generic update).</li>
+    <li><strong>A material edit clears the approval.</strong> Change the wording, the remedial text, the severity or the grade, and the confirmation comes off - so it has to be given again deliberately.</li>
+    <li>Put that rule in <strong>one shared write path</strong>, not in each screen. A comment in <code>bulk-accept.ts</code> records that this exact bug was fixed once before; a bug that returns is a missing rule, not a missing fix.</li>
+  </ul>
+
+  <div class="callout">
+    <span class="t">The one place I disagree with the review</span>
+    Codex wants the contractor's name forced at the moment you allocate. I would not do that. "This is a bricklayer's job" and "Bricklayer means Dave at Wates" change at different rates, and coupling them makes a 100-item pass slower and breaks the day Dave leaves. Keep them separate as data, require both before release, and show the resolved name at allocation as a confirmation rather than another field to fill in.
+  </div>
+</section>
+
+<!-- ============================= CHANGES 3-4 ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <h2 class="section">Changes 3 and 4: the gate, and the empty envelope</h2>
+  <div class="rule"></div>
+
+  <div class="chg">
+    <div class="hd"><div class="num">3</div><div class="ttl">The publish gate moves onto the server</div></div>
+    <div class="bd">
+      <div class="why">Publishing is blocked in the browser by <code>issueBlockers</code>. The function that actually writes the version and stamps the report as issued, <code>issueReport</code> (<code>report-data.ts:456-489</code>), checks nothing.</div>
+      <p>So the gate is a suggestion. A tab left open, or a call sent straight to the database, publishes an unreviewed report - and it looks identical to a properly issued one.</p>
+      <p><strong>The change:</strong> re-check the blockers where the version is written, so the check cannot be skipped. I would put it in the database rather than in a server function, because the database is the only layer the browser cannot route around.</p>
+      <p><span class="pill grey">Note</span> This is the one I will not write blind. A gate that is wrong in the wrong direction stops you publishing at all, so it gets tested against a real database before it goes anywhere near production.</p>
+    </div>
+  </div>
+
+  <div class="chg">
+    <div class="hd"><div class="num">4</div><div class="ttl">Nothing external exists for an unpublished report</div></div>
+    <div class="bd">
+      <div class="why">Trade extracts can be sent before a report is published. <code>distribute</code> mints the trade link and sends with no status check at all (<code>reports.$id.distribute.tsx:98-113</code>).</div>
+      <p>Worse than an ungated send, and this is the bit worth reading twice: a client email sent too early <strong>does not get stopped - it loses its link (<code>email.server.ts:577</code>) and its attachment (<code>pdf-attachment.server.ts:82</code>) and goes out empty</strong>. A client receives an email about a report with nothing in it.</p>
+      <p><strong>The change:</strong> nothing external exists for a report that is not published - full stop. A trade pack for a draft is either refused or carries a loud "DRAFT WORK PACK" identity with none of the client styling. A send that cannot be completed is refused, not half-sent.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="t">Credit where it is due, since it affects the risk count</span>
+    Two things in the product are already right and should not be touched: confidential findings are excluded from every external channel including share links and trade packs, and the <code>distributions</code> table (recipient snapshot, findings, status, opened time, error) is well designed - though it has zero rows, so the audit trail has never actually been exercised.
+  </div>
+</section>
+
+<!-- ============================= CHANGES 5-6 ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <h2 class="section">Changes 5 and 6: the link a supplier can open, and the reason you sent it</h2>
+  <div class="rule"></div>
+
+  <div class="chg">
+    <div class="hd"><div class="num">5</div><div class="ttl">The close-out email link points somewhere a supplier can open</div></div>
+    <div class="bd">
+      <div class="why">One line, and it contradicts the file's own comment two hundred lines above it.</div>
+      <p><code>email.server.ts:766</code> sends the subcontractor to <code>/reports/&lt;id&gt;</code> - an in-app address that requires a sign-in they cannot pass. The comment at <code>:543-545</code> states plainly that the in-app report URL is never emailed, for exactly that reason.</p>
+      <p><strong>The change:</strong> send the trade token URL - the same page the trade pack uses, which opens with no account. The machinery to build it already exists (<code>itemListLinkFor</code>, <code>:547-571</code>); the close-out path simply does not call it.</p>
+    </div>
+  </div>
+
+  <div class="chg">
+    <div class="hd"><div class="num">6</div><div class="ttl">The reason for a recipient gets recorded</div></div>
+    <div class="bd">
+      <div class="why">The distribution plan already works out who should receive a send, and why. It just does not keep the reason.</div>
+      <p>Findings carry a trade label; the person is resolved from the project directory at send time (<code>distribution-data.ts:244-271</code>). Nothing records which rule picked that address.</p>
+      <p><strong>The change:</strong> store the rule alongside the recipient on every send, with the reason. When a client asks "why did my site manager get this", the answer is in the record rather than in someone's memory.</p>
+    </div>
+  </div>
+
+  <div class="chg plain">
+    <div class="hd"><div class="num">7</div><div class="ttl">The UX tidy-up - deliberately last</div></div>
+    <div class="bd">
+      <div class="why">Six rows in one Share menu, allocation reachable from three places, four overlapping send actions. Real, and not a launch risk.</div>
+      <p>The target design already exists inside the product: manual photographic reports are PDF-only and never produce a review page. That is the "different document for a different audience" pattern the review recommends, already shipped and working. The tidy-up is making the rest of the product match it.</p>
+    </div>
+  </div>
+
+  <h3>What I am deliberately not changing</h3>
+  <ul>
+    <li><strong>Capture, analysis, triage, issuing and the PDFs.</strong> These are sound. The core product is not the problem.</li>
+    <li><strong>The confirmation workflow itself.</strong> It stays. Only the thing that quietly counts as a confirmation goes.</li>
+    <li><strong>Downloading your own draft PDF.</strong> Reading your own draft is the workflow, not the defect - it just has to keep calling itself a draft, which it now does.</li>
+  </ul>
+</section>
+
+<!-- ============================= DB + TESTS ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <div class="kicker">Section 3</div>
+  <h2 class="section">What needs the database, and how we know it works</h2>
+  <div class="rule"></div>
+
+  <h3>Database changes</h3>
+  <table class="tight">
+    <thead><tr><th style="width:30%">Change</th><th style="width:34%">What it is</th><th>Risk if wrong</th></tr></thead>
+    <tbody>
+      <tr><td>Share version pinning</td><td>One column added to <code>report_shares</code>. Existing rows are untouched and keep working.</td><td>Low - a link falls back to current behaviour.</td></tr>
+      <tr><td>Publish gate enforcement</td><td>A check where the version is written, so the gate cannot be bypassed.</td><td><strong>High if wrong</strong> - a bad check blocks publishing entirely. This one gets tested against a real database before it goes near production.</td></tr>
+      <tr><td>Recipient reason</td><td>One column, filled on send.</td><td>Low - additive.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout stop">
+    <span class="t">The line I will not cross without a second yes</span>
+    I can write and test these changes on a branch. <strong>Running a database migration against your live project is a different decision</strong> and I will not do it on my own initiative. You get told before it happens, and you can read it first.
+  </div>
+
+  <h3>The tests that have to pass before any of this is released</h3>
+  <ul>
+    <li>Publish v1, edit the wording, publish v2 - <strong>the v1 link still shows v1</strong>, and the changed sentence is absent from it.</li>
+    <li>Reopen a published report - the link already sent <strong>still shows the frozen version</strong>, not the working copy.</li>
+    <li>A draft report - minting a link is refused, and a trade pack is either refused or clearly marked as a draft.</li>
+    <li>Allocate a trade - the confirmation is <strong>unchanged</strong>. Then edit the wording - the confirmation is <strong>cleared</strong>, and Publish is <strong>blocked</strong>.</li>
+    <li>Apply bulk suggestions with five below the confidence threshold - <strong>none of them end up confirmed</strong>, and the release check lists them.</li>
+    <li>Call the publish path directly, bypassing the screen, with blockers present - <strong>it must fail</strong>.</li>
+    <li>A confidential item - absent from the share link, the trade pack and every email.</li>
+    <li>The close-out email link - opens with <strong>no sign-in</strong>.</li>
+    <li>The one that matters end to end: 47 findings, mixed confidence, one confidential, one unassessable. Triage, allocate, the release check lists exactly 3 blockers, fix them, publish, the client link is frozen, the trade pack is live, edit after publishing - the trade pack shows a change note and <strong>the client link does not move</strong>.</li>
+  </ul>
+
+  <div class="stamp">PROPOSAL - NOTHING HERE IS BUILT, COMMITTED OR APPLIED</div>
+</section>
+
+<!-- ============================= DECISION ============================= -->
+<section class="page">
+  <div class="bar"><span></span></div>
+  <h2 class="section">What I need from you</h2>
+  <div class="rule"></div>
+
+  <h3>One</h3>
+  <p><strong>A go.</strong> Say go and I will make changes 1, 2, 4 and 5 on a branch, with tests, and show you the diffs. Nothing pushed, nothing applied.</p>
+
+  <h3>Two</h3>
+  <p><strong>Do the three external surfaces stay switched off until this lands?</strong> That is public share links, trade packs, and client email. My advice is yes - those are the three places the product currently makes a promise it cannot keep. Your call, because it is your launch.</p>
+
+  <h3>Three</h3>
+  <p><strong>A second yes, later, for the database.</strong> Changes 3 and 6 add a column and a check to your live Supabase project. I will write and test them, then ask.</p>
+
+  <h3>What I am not asking for</h3>
+  <ul>
+    <li>No password. No credential of any kind, ever.</li>
+    <li>No decision on the UX tidy-up - it is last and it can wait.</li>
+    <li>No rush. Nothing here gets worse by waiting a day, and it all gets worse by shipping unfixed.</li>
+  </ul>
+
+  <div class="callout">
+    <span class="t">My recommendation, in one line</span>
+    Conditional go. No data-loss, no money, no safety risk anywhere in this list - the exposure is evidential and reputational. Ship the capture, analysis, triage, allocation and PDFs as they are; hold the three external surfaces until changes 1 and 2 are in.
+  </div>
+
+  <div class="foot">
+    Source references were read at commit <code>1d47100</code> (tip of <code>main</code>) on 11 October 2026. Working copy: branch <code>p0/report-integrity</code>, created but empty - no edits made. Findings originally raised by Codex; independently re-verified, and where I disagree it is stated as disagreement.
+  </div>
+</section>
+
+</body>
+</html>
